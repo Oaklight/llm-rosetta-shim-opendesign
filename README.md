@@ -81,7 +81,7 @@ client speaks; the shim signs the request the way that endpoint expects.
 
 This release does **not** read the Coding Plan allowance. Open Design reports
 that allowance on a separate control plane that does not accept a runtime API
-key. Quota support needs a second credential and is tracked as a follow-up.
+key. Quota support needs a second credential and is tracked in [Oaklight/llm-rosetta#1499](https://github.com/Oaklight/llm-rosetta/issues/1499).
 
 The gateway therefore reports the provider's quota as unsupported, and the
 provider hint says the same.
