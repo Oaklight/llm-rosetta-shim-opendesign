@@ -1,0 +1,8 @@
+# Open Design Cloud — OpenAI Chat Completions endpoint.
+name: opendesign--chat_completions
+model_type: llm
+format: chat_completions
+logo: https://open-design.ai/favicon.svg
+hint_msg:
+  en: "Open Design Cloud model gateway. Use an sk-amr runtime API key; it is sent as a Bearer token. The Coding Plan quota card is not available from this shim yet."
+  zh: "Open Design Cloud 模型网关。请使用 sk-amr 运行时 API Key，它会以 Bearer 形式发送。此 shim 暂时不提供 Coding Plan 额度卡片。"

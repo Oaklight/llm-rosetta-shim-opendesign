@@ -1,0 +1,8 @@
+# Open Design Cloud — Anthropic Messages endpoint.
+name: opendesign--messages
+model_type: llm
+format: messages
+logo: https://open-design.ai/favicon.svg
+hint_msg:
+  en: "Open Design Cloud model gateway. Use an sk-amr runtime API key; the Messages endpoint receives it as x-api-key with anthropic-version: 2023-06-01. The Coding Plan quota card is not available from this shim yet."
+  zh: "Open Design Cloud 模型网关。请使用 sk-amr 运行时 API Key；Messages 端点会以 x-api-key 接收，并附带 anthropic-version: 2023-06-01。此 shim 暂时不提供 Coding Plan 额度卡片。"

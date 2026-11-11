@@ -1,0 +1,10 @@
+# Open Design Cloud model gateway.
+#
+# The model plane accepts the runtime API key at /v1. Account sign-in and
+# Coding Plan allowance reads use a separate control plane and are not
+# supported by this package yet.
+connection:
+  base_url: https://amr-link.open-design.ai/v1
+  api_key_env: OPENDESIGN_API_KEY
+  models_path: https://amr-link.open-design.ai/v1/models
+  manage_usage_url: https://open-design.ai/cloud/usage
