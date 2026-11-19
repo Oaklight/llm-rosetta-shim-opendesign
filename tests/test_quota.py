@@ -19,6 +19,8 @@ from llm_rosetta_shim_opendesign.providers.opendesign.quota import (
     CONTROL_PLANE,
     PROBES,
     OpenDesignQuota,
+    _plan_name,
+    _share,
 )
 from llm_rosetta.shims.quota_probe import (
     QuotaProbeError,
@@ -98,6 +100,49 @@ def _answers(preflight: dict[str, Any] | None = None) -> dict[str, tuple[int, An
         "/api/v1/workspaces/ws-1/billing/preflight": (200, preflight or _preflight()),
         "/api/v1/billing/summary": (200, {"tier": "pro"}),
     }
+
+
+def _recorded_preflight() -> dict[str, Any]:
+    """The preflight body production answered on 2026-11-19, same shapes.
+
+    Credit quantities are decimal strings, not JSON numbers.  The reset times
+    move with the clock so the fixture cannot turn stale.
+    """
+    return {
+        "balanceUsd": "-0.0808",
+        "codingPlan": {
+            "eligible": True,
+            "tier": "go",
+            "windows": [
+                {
+                    "durationSeconds": 18000,
+                    "resetMode": "anchored_recurring",
+                    "usedCredits": "0",
+                    "limitCredits": "50000",
+                    "remainingCredits": "50000",
+                    "resetsAt": _iso(2),
+                },
+                {
+                    "durationSeconds": 604800,
+                    "resetMode": "anchored_recurring",
+                    "usedCredits": "150021",
+                    "limitCredits": "150000",
+                    "remainingCredits": "0",
+                    "resetsAt": _iso(96),
+                },
+            ],
+        },
+    }
+
+
+def _recorded_answers() -> dict[str, tuple[int, Any]]:
+    """The answers around the recorded preflight, summary included."""
+    answers = _answers(_recorded_preflight())
+    answers["/api/v1/billing/summary"] = (
+        200,
+        {"membershipTier": "go", "balanceUsd": "0.0000"},
+    )
+    return answers
 
 
 def _fetch(answers: dict[str, tuple[int, Any]]) -> tuple[str | None, list[Any]]:
@@ -195,11 +240,56 @@ class TestTheRead:
         assert windows[1].exhausted is False
 
 
+class TestTheRecordedPayload:
+    """The shapes production answered, not a tidied version of them.
+
+    The vendor writes credit quantities as decimal strings.  A decoder that
+    accepts only JSON numbers reads a spent plan as "no data" and leaves the
+    panel green while the model plane answers 402.
+    """
+
+    def test_the_decimal_string_quantities_decode(self):
+        plan, windows = _fetch(_recorded_answers())
+
+        assert plan == "go"
+        assert [window.name for window in windows] == ["5 hours", "7 days"]
+        assert windows[0].used_percent == pytest.approx(0.0)
+        assert windows[1].used_percent == pytest.approx(100.0)
+
+    def test_the_over_limit_window_is_exhausted(self):
+        """150021/150000 is 100.014%: remaining 0, and the dot must be red."""
+        _plan, windows = _fetch(_recorded_answers())
+
+        assert windows[0].exhausted is False
+        assert windows[1].exhausted is True
+
+    def test_a_string_quantity_is_a_number(self):
+        """Red if ``_share`` goes back to accepting only int/float."""
+        assert _share("0", "50000") == pytest.approx(0.0)
+        assert _share("150021", "150000") == pytest.approx(100.0)
+
+    def test_what_is_not_a_number_stays_unmeasured(self):
+        assert _share("many", "50000") is None
+        assert _share("0", "0") is None
+        assert _share("0", "-1") is None
+        assert _share(True, 100) is None
+        assert _share(None, 100) is None
+
+    def test_the_plan_name_is_the_membership_tier(self):
+        assert _plan_name({"membershipTier": "go"}) == "go"
+
+
 class TestTheDirectParse:
     def test_a_preflight_answer_parses_on_its_own(self):
         plan, windows = OpenDesignQuota().parse(_preflight(balanceUsd=12.5))
 
         assert plan == "balance $12.50"
+        assert len(windows) == 2
+
+    def test_the_recorded_string_balance_parses_on_its_own(self):
+        plan, windows = OpenDesignQuota().parse(_recorded_preflight())
+
+        assert plan == "balance $-0.08"
         assert len(windows) == 2
 
     def test_an_answer_without_a_window_is_refused(self):

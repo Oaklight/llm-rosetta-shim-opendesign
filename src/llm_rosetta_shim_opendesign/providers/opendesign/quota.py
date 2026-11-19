@@ -26,6 +26,7 @@ no relative or sibling imports.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from llm_rosetta.shims.quota_probe import (
@@ -51,6 +52,7 @@ except ImportError:  # pragma: no cover - taken only on a core older than the co
     class ProbeRefused(Exception):  # type: ignore[no-redef]
         """Stand-in: nothing raises it when the contract is absent."""
 
+
 CONTROL_PLANE = "https://amr-api.open-design.ai"
 
 #: The control plane sits behind a CDN that refuses urllib's default agent
@@ -70,15 +72,38 @@ def _span_name(seconds: Any) -> str:
     return _SPANS.get(whole, f"{whole // 3600}h" if whole >= 3600 else f"{whole}s")
 
 
+def _number(value: Any) -> float | None:
+    """Return *value* as a finite number, or ``None`` when it is not one.
+
+    The vendor encodes credit quantities as decimal strings (``"150021"``,
+    ``"0"``), so a JSON number and its string spelling are both accepted.  A
+    bool is not a quantity here, and neither is a string that does not spell
+    a finite number.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            number = float(text)
+        except ValueError:
+            return None
+    else:
+        return None
+    return number if math.isfinite(number) else None
+
+
 def _share(used: Any, limit: Any) -> float | None:
     """Return the used share of one window as a percentage, or ``None``."""
-    if isinstance(used, bool) or isinstance(limit, bool):
+    numerator = _number(used)
+    denominator = _number(limit)
+    if numerator is None or denominator is None or denominator <= 0:
         return None
-    if not isinstance(used, (int, float)) or not isinstance(limit, (int, float)):
-        return None
-    if limit <= 0:
-        return None
-    return max(0.0, min(100.0, float(used) / float(limit) * 100.0))
+    return max(0.0, min(100.0, numerator / denominator * 100.0))
 
 
 def _status(window: dict[str, Any]) -> str:
@@ -122,7 +147,7 @@ def _plan_name(summary: Any) -> str | None:
     """Return the membership tier a billing summary names, if it names one."""
     if not isinstance(summary, dict):
         return None
-    for key in ("tier", "plan", "membership", "subscription"):
+    for key in ("membershipTier", "tier", "plan", "membership", "subscription"):
         value = summary.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -181,8 +206,8 @@ class OpenDesignQuota:
         windows = _windows(body)
         if not windows:
             raise QuotaProbeError("the control plane reported no Coding Plan window")
-        balance = body.get("balanceUsd")
-        plan = f"balance ${balance:.2f}" if isinstance(balance, (int, float)) else None
+        balance = _number(body.get("balanceUsd"))
+        plan = f"balance ${balance:.2f}" if balance is not None else None
         return plan, windows
 
     async def fetch(
